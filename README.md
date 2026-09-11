@@ -1,21 +1,120 @@
+<div align="center">
+
 # PrintAnything
 
-**Learning Geometric Plan Map for 3D Printing G-code Generation from Unoriented Point Clouds**
+### Learning Geometric Plan Map for 3D Printing G-code Generation from Unoriented Point Clouds
 
-Sangmin Hong, Daniel Sungho Jung, Heewon Kim, Kyoung Mu Lee — ECCV 2026
+[Sangmin Hong](https://github.com/Sangminhong)<sup>1</sup> · Daniel Sungho Jung<sup>1</sup> · Heewon Kim<sup>3,4†</sup> · Kyoung Mu Lee<sup>1,2†</sup>
 
-[paper](https://arxiv.org/abs/2607.27729) · [arXiv:2607.27729](https://arxiv.org/abs/2607.27729)
+<sup>1</sup>IPAI, Seoul National University · <sup>2</sup>Dept. of ECE & ASRI, Seoul National University<br>
+<sup>3</sup>Soongsil University · <sup>4</sup>Kairoba Inc. &nbsp;&nbsp;<sub>(†co-corresponding author)</sub>
 
-PrintAnything turns a raw, unoriented point cloud directly into executable 3D
-printing G-code — no mesh reconstruction anywhere in the pipeline. Instead of
-repairing a reconstructed surface, it predicts a **Geometric plan (G-plan) map**:
-a compact per-slice representation of what to print, made of an occupancy map
-`M`, a region map `R` and a flow map `Q`.
+**ECCV 2026**
 
-```
-point cloud ──► slice-wise projection ──► GPNet ──► G-plan map ──► infill ──► G-code
-                    (Sec. 3.2)          (Sec. 3.2)  M, R, Q     (Sec. 3.3)  (Sec. 3.4)
-```
+[![arXiv](https://img.shields.io/badge/arXiv-2607.27729-b31b1b.svg)](https://arxiv.org/abs/2607.27729)
+[![License](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org)
+[![PyTorch](https://img.shields.io/badge/PyTorch-1.13%2B-ee4c2c.svg)](https://pytorch.org)
+
+</div>
+
+---
+
+**PrintAnything turns a raw, unoriented point cloud straight into executable 3D
+printing G-code — no mesh reconstruction anywhere in the pipeline.**
+
+Existing pipelines need a watertight mesh, so a point cloud has to be
+reconstructed first; the artifacts that introduces — inverted faces, holes,
+topological inconsistencies — are hard to repair and propagate into the slicer.
+Instead of repairing a surface, PrintAnything predicts a **Geometric plan
+(G-plan) map**: a compact per-slice representation made of an occupancy map `M`
+(what is printed), a region map `R` (wall, infill, support, skirt) and a flow
+map `Q` (how much material to deposit).
+
+<div align="center">
+<img src="assets/figures/framework.png" width="100%" alt="The framework of PrintAnything">
+</div>
+
+From the input point cloud and the slice indices, GPNet predicts `M`, `R` and
+`Q`. The infill pattern generator fills the predicted infill regions from a
+template dictionary, and the slice-wise compiler turns the result into G-code a
+printer can execute.
+
+## Real-world 3D prints
+
+Every object below was fabricated on a Bambu Lab X1-Carbon **directly from the
+G-code this pipeline generates**, with no post-processing of the toolpaths —
+including cogwheels with consistent teeth and parts with thin, delicate
+structures. The printed parts stayed intact under manual pressure tests.
+
+<div align="center">
+<img src="assets/figures/real_prints.jpg" width="78%" alt="3D printed output by a real machine">
+</div>
+
+## Results
+
+On the held-out split of [Slice-100K](https://github.com/idealab-isu/slice-100k),
+against the standard workflow PrintAnything replaces — reconstruct a mesh from
+the point cloud, then slice it with PrusaSlicer.
+
+<table>
+<tr><th>Representation</th><th>Method</th><th>CD ↓</th><th>F1<sub>3D</sub> ↑</th><th>F1<sub>2D</sub> ↑</th></tr>
+<tr><td rowspan="3">Mesh</td><td>Poisson</td><td>0.088</td><td>0.682</td><td>0.587</td></tr>
+<tr><td>DWG</td><td>0.062</td><td>0.712</td><td>0.496</td></tr>
+<tr><td>MeshAnything</td><td>0.157</td><td>0.480</td><td>0.356</td></tr>
+<tr><td><b>G-plan map</b></td><td><b>PrintAnything (Ours)</b></td><td><b>0.047</b></td><td><b>0.741</b></td><td><b>0.677</b></td></tr>
+</table>
+
+Mesh-based pipelines accumulate error across stages: a small reconstruction
+artifact is amplified by the slicer, which shows up most clearly in the
+slice-level score.
+
+<div align="center">
+<img src="assets/figures/qualitative.jpg" width="92%" alt="Qualitative comparison on Slice-100K">
+</div>
+
+Poisson smooths away thin structures and learned mesh methods break surfaces or
+add local clutter, both of which turn into missing or fragmented toolpaths after
+slicing. Our prints stay coherent on slender parts and sharp features.
+
+<details>
+<summary><b>Ablations</b> — multi-slice conditioning, G-plan map design, infill policy</summary>
+
+<br>
+
+**Multi-slice conditioning** (Table 2). Conditioning each slice on its
+neighbours resolves slice-wise ambiguities: 20.3% lower CD.
+
+| Multi-slice conditioning | CD ↓ | F1<sub>3D</sub> ↑ | F1<sub>2D</sub> ↑ |
+|:---:|:---:|:---:|:---:|
+| ✗ | 0.059 | 0.702 | 0.652 |
+| ✓ | **0.047** | **0.741** | **0.677** |
+
+**G-plan map design** (Table 4). The region map improves geometry; the flow map
+is what makes the extrusion itself consistent — 56.8% lower Δρ-smooth.
+
+| M | R | Q | CD ↓ | F1<sub>3D</sub> ↑ | F1<sub>2D</sub> ↑ | Δρ-smooth ↓ | ρ-CV ↓ |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| ✓ | ✗ | ✗ | 0.052 | 0.709 | 0.635 | 0.082 | 1.055 |
+| ✓ | ✓ | ✗ | **0.046** | 0.728 | 0.675 | 0.081 | 1.059 |
+| ✓ | ✓ | ✓ | 0.047 | **0.741** | **0.677** | **0.035** | **0.909** |
+
+**Infill policy recommendation** (Table 3). The recommender reaches competitive
+strength at the lowest fabrication cost, so the best strength-per-cost overall.
+
+| Method | Strength ↑ | Cost ↓ | Combined ↑ |
+|:---|:---:|:---:|:---:|
+| Random pattern + random scale | 0.294 | 38,808 | 0.757 |
+| Cubic + random scale | 0.298 | 36,994 | 0.806 |
+| Grid + random scale | **0.310** | 41,535 | 0.748 |
+| Gyroid + random scale | 0.271 | 42,247 | 0.643 |
+| Honeycomb + random scale | 0.294 | 35,445 | 0.830 |
+| Random pattern + fixed scale (s=1.0) | 0.300 | 35,866 | 0.837 |
+| **Ours (recommender)** | 0.308 | **32,974** | **0.937** |
+
+</details>
+
+See [docs/REPRODUCE.md](docs/REPRODUCE.md) for the command behind each table.
 
 ---
 
@@ -190,7 +289,16 @@ surrogate and compares it against the fixed-policy baselines of Table 3.
 }
 ```
 
+## Acknowledgement
+
+This work was supported in part by the IITP grants [No. RS-2021-II211343,
+Artificial Intelligence Graduate School Program (Seoul National University),
+No. RS-2024-00426853, No. RS-2025-02303870, No. 2022-0-00156] funded by the
+Korea government (MSIT). We thank Juhyoung Lee for assistance with the physical
+3D printing and sample fabrication.
+
 ## Licence
 
 Released under [CC BY-NC 4.0](LICENSE) (non-commercial).
 `third_party/PointTransformerV3` keeps its original licence.
+Figures are taken from the paper.
