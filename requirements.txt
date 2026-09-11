@@ -1,0 +1,20 @@
+# Core (install torch for your own CUDA build first: https://pytorch.org)
+torch>=1.13
+numpy>=1.21
+scipy>=1.7
+scikit-image>=0.19
+trimesh>=3.20
+tqdm>=4.62
+matplotlib>=3.5
+
+# Point Transformer V3 encoder (--point_encoder ptv3, the paper's setting).
+# spconv must match your CUDA version; --point_encoder pointnet needs none of these.
+addict
+timm
+torch-scatter
+# spconv-cu120        # e.g. spconv-cu118 / spconv-cu120, matching your CUDA
+
+# Optional
+# open3d>=0.17        # Poisson reconstruction baseline
+# scikit-learn>=1.0   # infill policy recommender
+# rtree>=1.0          # inside-mesh validity check for predicted infill

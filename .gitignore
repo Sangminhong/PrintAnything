@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.DS_Store
+
+# data, runs and outputs
+data/
+runs/
+outputs/
+checkpoints/
+*.gcode
+*.bgcode
+*.stl
+*.ply
+*.npy
+!assets/infill_patterns/*.npy
+.cache/
